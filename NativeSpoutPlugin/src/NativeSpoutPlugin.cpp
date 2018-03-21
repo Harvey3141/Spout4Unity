@@ -224,7 +224,6 @@ extern "C" bool EXPORT_API init()
 
 int getIndexForSenderName(char * senderName)
 {
-	
 	if(g_DeviceType == 2) //DX11
 	{
 		//printf("Get Index For Name %s  (%i active Senders) :\n",senderName,numActiveSenders);
@@ -387,19 +386,40 @@ extern "C" bool EXPORT_API updateSender(char* senderName, void * texturePointer)
 			return false;
 		}
 
-		HANDLE targetHandle = activeHandles[senderIndex];
+		D3D11_TEXTURE2D_DESC srcD;
+		((ID3D11Texture2D *)texturePointer)->GetDesc(&srcD);
+		//printf("update texFormat %i %i\n",texFormat,td.Format);
 
+
+		D3D11_TEXTURE2D_DESC destD;
+		activeTextures[senderIndex]->GetDesc(&destD);
+
+		// Have texture dimesions changed?
+		if (srcD.Width != destD.Width || srcD.Height != destD.Height) {
+
+			printf("Texture dimensions changed, old W - %i , H - %i , new W - %i, H - %i \n", destD.Width, destD.Height, srcD.Width, srcD.Height);
+			// Create a new shared texture.
+			ID3D11Texture2D* sendingTexture;
+			auto res_spout = sdx->CreateSharedDX11Texture(g_D3D11Device, srcD.Width, srcD.Height, destD.Format, &sendingTexture, activeHandles[senderIndex]);
+
+			if (!res_spout)
+			{
+				printf("CreateSharedDX11Texture - failed \n");
+				return false;
+			}
+			else {
+				activeTextures.at(senderIndex) = sendingTexture;
+				// Update sender info
+				HANDLE targetHandle = activeHandles[senderIndex];
+				result = sender->UpdateSender(senderName, srcD.Width, srcD.Height, targetHandle);
+			}
+		}	
 		ID3D11Texture2D * targetTex = activeTextures[senderIndex];
 	
 		g_pImmediateContext->CopyResource(targetTex,(ID3D11Texture2D*)texturePointer);
 		g_pImmediateContext->Flush();
 	
-		D3D11_TEXTURE2D_DESC td;
-		((ID3D11Texture2D *)texturePointer)->GetDesc(&td);
-		//printf("update texFormat %i %i\n",texFormat,td.Format);
 
-
-		result = sender->UpdateSender(senderName,td.Width,td.Height,targetHandle);
 	//printf("updateSender result : %i\n",result);
 	
 
@@ -528,6 +548,10 @@ extern "C" void EXPORT_API closeSender(char * senderName)
 	
 }
 
+extern "C" bool EXPORT_API doesSenderExist(char * senderName) 
+{
+	return sender->FindSenderName(senderName);
+}
 
 // *************** RECEIVING ************************ //
 
